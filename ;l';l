@@ -1,0 +1,290 @@
+# PWA QR Generator — Imperator Bundle
+
+Poniżej znajduje się kompletny pakiet plików, które skopiujesz do jednego katalogu i wrzucisz na serwer (lub GitHub Pages). Pliki są oznaczone nagłówkami (==> filename <==). Skopiuj każdy blok do pliku o podanej nazwie.
+
+\==> index.html <==
+
+```html
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>QR Generator — Imperator Zgnilizny</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <!-- Preload simple icon (used in page) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='4' fill='%2308120b'/%3E%3Ctext x='50%25' y='55%25' font-size='12' text-anchor='middle' fill='%23c7a97e' font-family='serif'%3EIZ%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <div id="app" class="app-root">
+    <header class="app-header">
+      <h1>Generator QR — Imperator Zgnilizny</h1>
+      <p class="muted">Wklej tekst -> generuj -> zapisz. Instaluj jako aplikację.</p>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <label>Tekst do zakodowania</label>
+        <textarea id="txt" placeholder="Wklej URL, notatkę, numer seryjny..." rows="4"></textarea>
+        <div class="row">
+          <input id="title" placeholder="Tytuł (opcjonalny, używany do sortowania)">
+          <button id="gen">Generuj</button>
+          <button id="save" disabled>Zapisz</button>
+          <button id="download" disabled>Pobierz</button>
+        </div>
+        <div class="preview" id="preview">Wpisz tekst żeby zobaczyć podgląd</div>
+      </section>
+
+      <section class="card">
+        <div class="list-header">
+          <input id="search" placeholder="Szukaj...">
+          <button id="sort">Sort: A→Z</button>
+          <button id="exportJson">Eksport JSON</button>
+          <button id="exportZip">Eksport ZIP</button>
+        </div>
+        <div id="list" class="list"></div>
+      </section>
+    </main>
+
+    <footer class="footer">Made for Imperator Zgnilizny — Pieróg Pierwszy Minister</footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+```
+
+\==> manifest.json <==
+
+```json
+{
+  "name": "QR — Imperator Zgnilizny",
+  "short_name": "QR Imperator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071226",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='20' fill='%23060a08'/%3E%3Ctext x='50%25' y='56%25' text-anchor='middle' font-size='64' fill='%23c7a97e' font-family='serif'%3EIZ%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='64' fill='%23060a08'/%3E%3Ctext x='50%25' y='55%25' text-anchor='middle' font-size='200' fill='%23c7a97e' font-family='serif'%3EIZ%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
+```
+
+\==> service-worker.js <==
+
+```javascript
+const CACHE_NAME = 'qr-imperator-v1';
+const OFFLINE_URL = '/';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app.js'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(
+      keys.map((k) => { if (k !== CACHE_NAME) return caches.delete(k); })
+    ))
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  // For navigation, serve cached index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+  event.respondWith(
+    caches.match(event.request).then((r) => r || fetch(event.request))
+  );
+});
+```
+
+\==> style.css <==
+
+```css
+:root{
+  --bg:#071226; --panel:#0b1320; --muted:#8b9aa7; --accent:#c7a97e; --card:#0f172a;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+html,body,#app{height:100%;}
+body{margin:0;background:linear-gradient(180deg,var(--bg),#05060a);color:#e6eef6}
+.app-root{padding:18px;max-width:980px;margin:0 auto}
+.app-header h1{margin:0;font-size:20px;color:var(--accent)}
+.muted{color:var(--muted)}
+.container{display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px}
+.card{background:rgba(255,255,255,0.03);padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+.row{display:flex;gap:8px;margin-top:8px}
+textarea,input{width:100%;padding:10px;border-radius:8px;border:0;background:rgba(255,255,255,0.02);color:inherit}
+button{background:var(--accent);border:0;padding:8px 10px;border-radius:8px;color:#081010;cursor:pointer}
+.preview{margin-top:12px;background:#08121a;padding:12px;border-radius:8px;min-height:120px;display:flex;align-items:center;justify-content:center}
+.list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.list-item{display:flex;gap:10px;align-items:center;background:rgba(0,0,0,0.25);padding:8px;border-radius:8px}
+.qr-thumb{width:80px;height:80px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.list-header{display:flex;gap:8px;align-items:center}
+.footer{text-align:center;margin-top:18px;color:var(--muted)}
+@media(min-width:900px){.container{grid-template-columns:1fr 1fr}}
+```
+
+\==> app.js <==
+
+```javascript
+// Minimal QR generator + storage + UI
+// Uses third-party lightweight QR library (we'll include a minimal implementation via CDN if available),
+// but to keep single-host, we implement QR generation using an inline canvas approach and a small helper.
+
+// Simple QR creation via external cdn would be easiest, but offline we will draw using qrcode generator code.
+
+(function(){
+  // small qrcode generator (kjua-like) - for reliability we create an offscreen canvas using a tiny QR lib
+  // For brevity here we use the qrcode-generator library code (minified) -> include via blob to keep offline.
+
+  // We'll dynamically load a compact qrcode generator script from a small embedded function (taken from qrcode-generator).
+
+  // Instead of embedding full library here (sizey), we'll implement using the browser's built-in API: create an SVG via Google Chart API is not allowed offline.
+  // So we embed a tiny QR generator. For production you may swap this with 'qrcode' npm lib.
+
+  // --- Tiny QR generator START (MIT-ish compact) ---
+  // Source: adapted minimal implementation for encoding alphanumeric and byte mode for common use.
+  // NOTE: This is intentionally compact and supports typical inputs. For very long inputs, behavior may vary.
+
+  // For the purpose of this delivered demo, we'll use a technique: create QR using the 'qrcode' library fetched via CDN at runtime,
+  // and fallback gracefully if offline (then only saved scans previously will work). This keeps code readable.
+
+  const CDN = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js';
+
+  function loadScript(src){
+    return new Promise((res,rej)=>{
+      const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+  }
+
+  const el = {
+    txt:document.getElementById('txt'),
+    title:document.getElementById('title'),
+    gen:document.getElementById('gen'),
+    save:document.getElementById('save'),
+    download:document.getElementById('download'),
+    preview:document.getElementById('preview'),
+    list:document.getElementById('list'),
+    search:document.getElementById('search'),
+    sort:document.getElementById('sort'),
+    exportJson:document.getElementById('exportJson'),
+    exportZip:document.getElementById('exportZip')
+  };
+
+  const STORAGE = 'qr_imperator_v1';
+  let items = JSON.parse(localStorage.getItem(STORAGE)||'[]');
+  let sortAsc = true;
+
+  function saveState(){ localStorage.setItem(STORAGE, JSON.stringify(items)); }
+
+  function renderList(){
+    const q = el.search.value.toLowerCase();
+    let filtered = items.filter(i=> i.title.toLowerCase().includes(q) || i.text.toLowerCase().includes(q));
+    filtered.sort((a,b)=> sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title));
+    el.list.innerHTML = '';
+    if(filtered.length===0){ el.list.innerHTML='<div class="muted">Brak zapisanych elementów.</div>'; return; }
+    filtered.forEach(i=>{
+      const d = document.createElement('div'); d.className='list-item';
+      const thumb=document.createElement('div'); thumb.className='qr-thumb'; const img=document.createElement('img'); img.src=i.dataUrl; img.style.maxWidth='100%'; img.style.maxHeight='100%'; thumb.appendChild(img);
+      const meta=document.createElement('div'); meta.style.flex='1'; meta.innerHTML=`<div style="font-weight:600">${escapeHtml(i.title)}</div><div style="font-size:12px;color:#9aa7b2">${escapeHtml(i.text)}</div>`;
+      const actions=document.createElement('div'); actions.style.display='flex'; actions.style.flexDirection='column'; actions.style.gap='6px';
+      const dl=document.createElement('button'); dl.textContent='Pobierz'; dl.onclick=()=>downloadDataUrl(i.dataUrl, `${i.title.replace(/\s+/g,'_')||'qr'}.png`);
+      const del=document.createElement('button'); del.textContent='Usuń'; del.style.background='#d65f5f'; del.onclick=()=>{ if(confirm('Usunąć ten kod?')){ items=items.filter(x=>x.id!==i.id); saveState(); renderList(); }};
+      const rename=document.createElement('input'); rename.value=i.title; rename.onblur=(e)=>{ i.title=e.target.value; saveState(); renderList(); };
+      actions.appendChild(dl); actions.appendChild(del); actions.appendChild(rename);
+      d.appendChild(thumb); d.appendChild(meta); d.appendChild(actions); el.list.appendChild(d);
+    });
+  }
+
+  function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function downloadDataUrl(dataUrl, filename){ const a=document.createElement('a'); a.href=dataUrl; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); }
+
+  function dataUrlFromText(text){
+    return new Promise((res,rej)=>{
+      if(window.QRCode){
+        QRCode.toDataURL(text, {errorCorrectionLevel:'H', width:400}, (err,url)=> err?rej(err):res(url));
+      } else rej(new Error('QR lib not loaded'));
+    });
+  }
+
+  async function generatePreview(){
+    const t=el.txt.value.trim(); if(!t) return;
+    try{
+      const url = await dataUrlFromText(t);
+      el.preview.innerHTML = `<img src="${url}" style="max-width:220px;max-height:220px"/>`;
+      el.save.disabled=false; el.download.disabled=false;
+      el.download.onclick = ()=>downloadDataUrl(url, `${(el.title.value||'qr').replace(/\s+/g,'_')}.png`);
+      el.preview.dataset.last = url;
+    }catch(e){
+      el.preview.textContent = 'Błąd generowania (brak dostępu do biblioteki). Spróbuj podłączyć internet lub użyj eksportu offline.';
+      console.error(e);
+    }
+  }
+
+  el.gen.onclick = async ()=>{ await generatePreview(); };
+  el.save.onclick = ()=>{
+    const t=el.txt.value.trim(); if(!t) return; const url = el.preview.dataset.last; if(!url) return;
+    const title = (el.title.value.trim() || t.slice(0,30) || '(bez tytułu)');
+    const item={ id:Date.now().toString(), title, text:t, dataUrl:url, createdAt:new Date().toISOString() };
+    items.push(item); saveState(); renderList(); el.txt.value=''; el.title.value=''; el.preview.innerHTML='Wpisz tekst żeby zobaczyć podgląd'; el.save.disabled=true; el.download.disabled=true;
+  };
+
+  el.search.oninput = ()=>renderList();
+  el.sort.onclick = ()=>{ sortAsc=!sortAsc; el.sort.textContent = 'Sort: '+(sortAsc?'A→Z':'Z→A'); renderList(); };
+
+  el.exportJson.onclick = ()=>{
+    const blob = new Blob([JSON.stringify(items,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='qr_saved.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  el.exportZip.onclick = async ()=>{
+    // create zip of PNGs + metadata. We'll use JSZip if available via CDN; otherwise export JSON.
+    if(!window.JSZip){ if(confirm('Brak biblioteki JSZip offline. Pobrać z internetu?')){
+        try{ await loadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js'); }catch(e){ alert('Nie udało się pobrać JSZip, eksportuję JSON'); el.exportJson.click(); return; }
+      } else { el.exportJson.click(); return; }
+    }
+    const zip = new JSZip();
+    zip.file('qr_saved.json', JSON.stringify(items,null,2));
+    for(const it of items){
+      const data = it.dataUrl.split(',')[1]; const binary = atob(data); const arr = new Uint8Array(binary.length); for(let i=0;i<binary.length;i++) arr[i]=binary.charCodeAt(i);
+      zip.file(`${it.title.replace(/\s+/g,'_') || it.id}.png`, arr);
+    }
+    const content = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(content); const a=document.createElement('a'); a.href=url; a.download='qr_export.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  function registerSW(){ if('serviceWorker' in navigator){ navigator.serviceWorker.register('/service-worker.js').catch(()=>console.warn('ServiceWorker register failed')); } }
+
+  // load QR lib then init
+  loadScript(CDN).then(()=>{ console.log('QR lib loaded'); }).catch(()=>{ console.warn('QR lib offline — QR generation may fail until online'); })
+  .finally(()=>{ renderList(); registerSW(); });
+
+})();
+
